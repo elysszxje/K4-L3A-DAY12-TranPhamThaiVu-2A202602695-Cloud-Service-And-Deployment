@@ -12,7 +12,7 @@
 |-----|----------|
 | Họ và tên | Trần Phạm Thái Vũ |
 | Mã học viên | 2A202602695 |
-| Repo | https://github.com/elysszxje/K4-L3A-DAY12-TranPhamThaiVu-2A202602695-CloudServicesAndDeployment |
+| Repo | https://github.com/elysszxje/K4-L3A-DAY12-TranPhamThaiVu-2A202602695-CloudServiceAndDeployment |
 
 ## Service
 
