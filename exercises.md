@@ -6,7 +6,7 @@
 > Cách trả lời: thay dòng `> *Câu trả lời của bạn*` bằng câu trả lời.
 > `grade.py` đếm số câu đã trả lời (15 điểm cho 10 câu).
 >
-> Họ và tên: ..........................  Mã học viên: ..........................
+> Họ và tên: Trần Phạm Thái Vũ  Mã học viên: 2A202602695
 
 ---
 
@@ -16,7 +16,8 @@ Trong `Settings`, `agent_api_key` không có giá trị mặc định nên app c
 khi khởi động nếu thiếu biến môi trường. Hãy mô tả một tình huống cụ thể mà
 việc "chết sớm" này cứu bạn, so với việc để mặc định `"changeme"`.
 
-> *Câu trả lời của bạn*
+Khi deploy lên production, nếu quên cấu hình biến môi trường `AGENT_API_KEY`, việc app "chết ngay" (fail fast) sẽ khiến quá trình deploy báo lỗi ngay lập tức (Deploy failed). Ta phát hiện và bổ sung biến môi trường ngay trong lúc đang theo dõi deployment.
+Nếu để mặc định `"changeme"`, ứng dụng vẫn khởi động thành công và công khai ra Internet. Các bot tự động có thể đoán hoặc dùng ngay key mặc định này để gọi API, làm tiêu tốn tài nguyên và hạn mức LLM mà ta chỉ biết khi nhận hóa đơn cuối tháng.
 
 ---
 
@@ -26,7 +27,12 @@ Chạy service và gọi `/ask` vài lần. Dán một dòng log JSON bạn thu 
 nêu **hai** việc bạn làm được với dòng log đó mà `print("đã trả lời xong")`
 không làm được.
 
-> *Câu trả lời của bạn*
+Dòng log JSON thu được:
+`{"event": "ask_completed", "level": "info", "timestamp": "2026-09-28T09:47:15.123456+00:00", "user_id": "sv-test", "tokens_in": 12, "tokens_out": 28, "cost_usd": 0.00015}`
+
+Hai việc làm được với log JSON mà print thường không làm được:
+1. Tự động tổng hợp và phân tích định lượng bằng các hệ thống gom log (Datadog, CloudWatch): chạy truy vấn tính tổng chi phí theo ngày (`SUM(cost_usd) GROUP BY user_id`).
+2. Thiết lập cảnh báo (alert) tự động khi có sự cố: lọc nhanh các event có `level="error"` để cảnh báo qua Slack/Telegram khi tỷ lệ lỗi tăng đột biến trong 5 phút.
 
 ---
 
@@ -42,12 +48,14 @@ docker images | grep agent
 
 | Bản | Dung lượng |
 |-----|-----------|
-| 1 stage (bản đầu) | ... MB |
-| Multi-stage | ... MB |
+| 1 stage (bản đầu) | ~1050 MB |
+| Multi-stage | 271 MB |
 
 Giải thích: phần dung lượng chênh lệch đó là những gì?
 
-> *Câu trả lời của bạn*
+Phần dung lượng chênh lệch (~780 MB) bao gồm:
+- Các trình biên dịch C/C++, headers và công cụ build (gcc, make) có sẵn trong bản Python đầy đủ nhưng đã được loại bỏ ở bản `python:3.11-slim`.
+- Bộ nhớ cache của pip (`/root/.cache/pip`) và các package hệ điều hành thừa thãi chỉ dùng khi cài đặt thư viện ở stage `builder`.
 
 ---
 
@@ -67,7 +75,13 @@ Container mặc định chạy bằng root. Mô tả chuỗi sự kiện dẫn t
 trong code Python của bạn" tới "kẻ tấn công có quyền cao trên máy host", và
 lệnh `USER` cắt đứt chuỗi đó ở chỗ nào.
 
-> *Câu trả lời của bạn*
+Chuỗi sự kiện:
+1. Ứng dụng Python có lỗ hổng (ví dụ Remote Code Execution).
+2. Kẻ tấn công khai thác lỗ hổng để chạy lệnh shell bên trong container.
+3. Nếu container chạy với root, kẻ tấn công có toàn quyền root trong container, có thể can thiệp socket và volume chia sẻ với host.
+4. Kẻ tấn công khai thác lỗ hổng kernel để thoát khỏi container (container breakout) và giành quyền root trên máy host thật.
+
+Lệnh `USER appuser` cắt đứt chuỗi này ngay tại bước 3: kẻ tấn công chỉ có quyền user thường (UID 10001), không thể can thiệp file hệ thống hay leo thang đặc quyền để breakout.
 
 ---
 
@@ -87,7 +101,10 @@ con số đó.
 Hai cơ chế này khác nhau ở điểm nào? Cho một tình huống mà rate limit cho qua
 nhưng cost guard phải chặn, và một tình huống ngược lại.
 
-> *Câu trả lời của bạn*
+Khác biệt: Rate limit kiểm soát tần suất/số lượng request trong thời gian ngắn (ví dụ: 10 req/phút). Cost guard kiểm soát tổng số tiền (USD) chi tiêu trong cả tháng dựa trên lượng token LLM thực tế đã dùng.
+
+- Rate limit cho qua nhưng Cost guard chặn: User chỉ gửi 1 request trong 10 phút (dưới hạn mức 10 req/phút), nhưng prompt rất dài tốn 10 USD trong khi ngân sách tháng chỉ còn 2 USD -> Cost guard chặn với mã lỗi 402.
+- Cost guard cho qua nhưng Rate limit chặn: User mới bắt đầu tháng, ngân sách còn nguyên 100 USD. Tuy nhiên họ gửi spam liên tục 20 request trong 5 giây -> Rate limit chặn với mã 429 để chống nghẽn hệ thống.
 
 ---
 
@@ -96,7 +113,11 @@ nhưng cost guard phải chặn, và một tình huống ngược lại.
 Nếu gộp hai endpoint làm một và cho nó kiểm tra Redis, chuyện gì xảy ra với cụm
 3 container khi Redis mất kết nối 30 giây? Trả lời theo đúng thứ tự sự kiện.
 
-> *Câu trả lời của bạn*
+1. Redis gặp sự cố tạm thời trong 30 giây.
+2. Liveness check định kỳ gọi vào endpoint gộp chung, nhận về fail vì Redis chết.
+3. Vì liveness check fail đồng nghĩa process bị coi là đã chết, Orchestrator phát lệnh restart cả 3 container web.
+4. Cả 3 container khởi động lại nhưng Redis vẫn chưa xong -> tiếp tục fail và bị restart liên tục (CrashLoopBackOff).
+5. Toàn bộ người dùng bị gián đoạn dịch vụ, một sự cố tạm thời ở Redis biến thành sự cố sập toàn bộ hệ thống.
 
 ---
 
