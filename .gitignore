@@ -1,5 +1,7 @@
 # Secrets — KHÔNG BAO GIỜ commit
 .env
+.env.*
+!.env.example
 *.pem
 *.key
 
@@ -11,12 +13,18 @@ venv/
 env/
 .pytest_cache/
 *.egg-info/
+.coverage
+htmlcov/
 
 # OS / editor
 .DS_Store
 Thumbs.db
+desktop.ini
+*.tmp
 .idea/
 .vscode/
+.cursor/
+.trae/
 
 # Logs
 *.log
