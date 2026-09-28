@@ -109,6 +109,42 @@ def ask(
     limiter: RateLimiter = Depends(get_rate_limiter),
     guard: CostGuard = Depends(get_cost_guard),
 ):
+    # 1. Kiểm tra rate limit
+    limiter.check(user_id)
+
+    # 2. Kiểm tra ngân sách
+    guard.check(user_id)
+
+    # 3. Lấy lịch sử hội thoại
+    history = store.get_history(user_id)
+
+    # 4. Gọi LLM
+    result = ask_llm(payload.question, history)
+
+    # 5. Lưu câu hỏi và câu trả lời vào store
+    store.append(user_id, "user", payload.question)
+    store.append(user_id, "assistant", result["answer"])
+
+    # 6. Ghi nhận chi phí
+    guard.record(user_id, result["cost_usd"])
+
+    # 7. Log sự kiện JSON
+    log_event(
+        "ask_completed",
+        user_id=user_id,
+        tokens_in=result["tokens_in"],
+        tokens_out=result["tokens_out"],
+        cost_usd=result["cost_usd"],
+    )
+
+    # 8. Trả về response
+    return {
+        "answer": result["answer"],
+        "user_id": user_id,
+        "history_length": len(history),
+        "cost_usd": result["cost_usd"],
+        "tokens": {"in": result["tokens_in"], "out": result["tokens_out"]},
+    }
     """Hỏi agent một câu.
 
     TODO (CP3 + CP4) — làm ĐÚNG THỨ TỰ sau:

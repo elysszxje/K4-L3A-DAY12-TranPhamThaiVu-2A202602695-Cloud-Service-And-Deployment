@@ -21,14 +21,37 @@
 #            docker images day12-agent:prod     # xem dung lượng
 # ═══════════════════════════════════════════════════════════════════
 
-FROM python:3.11
+# Stage 1: Builder
+FROM python:3.11-slim AS builder
 
 WORKDIR /app
 
-COPY . .
+COPY requirements.txt .
+RUN pip install --no-cache-dir --prefix=/install -r requirements.txt
 
-RUN pip install -r requirements.txt
+# Stage 2: Runtime
+FROM python:3.11-slim AS runtime
+
+WORKDIR /app
+
+# Copy thư viện đã build từ stage builder sang
+COPY --from=builder /install /usr/local
+
+# Tạo non-root user
+RUN useradd --create-home --uid 10001 appuser
+
+# Copy mã nguồn ứng dụng
+COPY app ./app
+COPY utils ./utils
+
+# Chuyển sang user thường
+USER appuser
+
+# Healthcheck định kỳ gọi /health
+HEALTHCHECK --interval=30s --timeout=5s --retries=3 \
+    CMD python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health').read()" || exit 1
 
 EXPOSE 8000
 
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+# Đọc PORT từ môi trường do Cloud cấp, fallback về 8000
+CMD ["sh", "-c", "uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}"]
